@@ -1491,6 +1491,13 @@ static mp_obj_t mp_obj_is_subclass(mp_obj_t object, mp_obj_t classinfo) {
         if (items[i] == MP_OBJ_FROM_PTR(&mp_type_object) || mp_obj_is_subclass_fast(object, items[i])) {
             return mp_const_true;
         }
+        if (mp_obj_is_type(items[i], &mp_type_tuple)) {
+            // CPython accepts arbitrarily nested tuples of classes; recurse.
+            mp_cstack_check();
+            if (mp_obj_is_subclass(object, items[i]) == mp_const_true) {
+                return mp_const_true;
+            }
+        }
     }
     return mp_const_false;
 }
