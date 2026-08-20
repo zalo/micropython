@@ -37,6 +37,14 @@
 #error "MICROPY_PY_SYS_SETTRACE requires MICROPY_PERSISTENT_CODE_SAVE to be enabled"
 #endif
 
+#elif MICROPY_PY_SYS_GETFRAME
+// sys._getframe builds its frames from the code-state chain and line-number
+// machinery that the settrace feature maintains.
+#error "MICROPY_PY_SYS_GETFRAME requires MICROPY_PY_SYS_SETTRACE to be enabled"
+#endif
+
+#if MICROPY_PY_SYS_SETTRACE
+
 #define prof_trace_cb MP_STATE_THREAD(prof_trace_callback)
 
 uint mp_prof_bytecode_lineno(const mp_raw_code_t *rc, size_t bc) {
@@ -97,7 +105,16 @@ static void frame_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
         case MP_QSTR_f_back:
             dest[0] = mp_const_none;
             if (o->code_state->prev_state) {
+                #if MICROPY_PY_SYS_GETFRAME
+                // Frames are created on demand when no trace function is
+                // installed; materialize the caller's frame if needed.
+                mp_obj_frame_t *back = mp_prof_frame_for(o->code_state->prev_state);
+                if (back != NULL) {
+                    dest[0] = MP_OBJ_FROM_PTR(back);
+                }
+                #else
                 dest[0] = MP_OBJ_FROM_PTR(o->code_state->prev_state->frame);
+                #endif
             }
             break;
         case MP_QSTR_f_code:
@@ -110,6 +127,16 @@ static void frame_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
             dest[0] = MP_OBJ_NEW_SMALL_INT(o->lasti);
             break;
         case MP_QSTR_f_lineno:
+            #if MICROPY_PY_SYS_GETFRAME
+            // While this frame's activation is live, report the line the VM
+            // is currently executing.  The trace path keeps frame->lineno
+            // fresh itself (and depends on its call-event value), so leave
+            // it alone during a trace callback.
+            if (!mp_prof_is_executing && o->code_state->frame == o) {
+                o->lineno = mp_prof_bytecode_lineno(o->code->rc,
+                    o->code_state->ip - o->code->rc->prelude.opcodes);
+            }
+            #endif
             dest[0] = MP_OBJ_NEW_SMALL_INT(o->lineno);
             break;
     }
@@ -152,6 +179,38 @@ mp_obj_t mp_obj_new_frame(const mp_code_state_t *code_state) {
     return MP_OBJ_FROM_PTR(o);
 }
 
+#if MICROPY_PY_SYS_GETFRAME
+
+// Return the (identity-stable) frame object for a code state, creating and
+// caching it on demand.  Returns NULL if it cannot be allocated.
+mp_obj_frame_t *mp_prof_frame_for(mp_code_state_t *code_state) {
+    if (code_state->frame == NULL) {
+        code_state->frame = MP_OBJ_TO_PTR(mp_obj_new_frame(code_state));
+    }
+    return code_state->frame;
+}
+
+// The implementation of sys._getframe(depth): walk the code-state chain from
+// the currently executing code state (the caller of sys._getframe, since
+// native calls don't push a code state).  Returns MP_OBJ_NULL if the stack
+// is not that deep.
+mp_obj_t mp_prof_sys_getframe(mp_int_t depth) {
+    mp_code_state_t *code_state = MP_STATE_THREAD(current_code_state);
+    while (code_state != NULL && depth > 0) {
+        code_state = code_state->prev_state;
+        depth--;
+    }
+    if (code_state == NULL) {
+        return MP_OBJ_NULL;
+    }
+    mp_obj_frame_t *frame = mp_prof_frame_for(code_state);
+    if (frame == NULL) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("can't create frame object"));
+    }
+    return MP_OBJ_FROM_PTR(frame);
+}
+
+#endif // MICROPY_PY_SYS_GETFRAME
 
 /******************************************************************************/
 // Trace logic

@@ -154,11 +154,20 @@
     assert(code_state != code_state->prev_state); \
 } while(0)
 
+#if MICROPY_PY_SYS_GETFRAME
+// With sys._getframe available, frame objects are created on demand from the
+// code-state chain, so only pay for eager per-call frame allocation while a
+// trace function actually needs the call event.
+#define FRAME_OBJ_NEEDED() (MP_STATE_THREAD(prof_trace_callback) != MP_OBJ_NULL)
+#else
+#define FRAME_OBJ_NEEDED() (true)
+#endif
+
 #define FRAME_ENTER() do { \
     assert(code_state != code_state->prev_state); \
     code_state->prev_state = MP_STATE_THREAD(current_code_state); \
     assert(code_state != code_state->prev_state); \
-    if (!mp_prof_is_executing) { \
+    if (!mp_prof_is_executing && FRAME_OBJ_NEEDED()) { \
         mp_prof_frame_enter(code_state); \
     } \
 } while(0)

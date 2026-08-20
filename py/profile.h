@@ -50,6 +50,14 @@ void mp_prof_extract_prelude(const byte *bytecode, mp_bytecode_prelude_t *prelud
 
 mp_obj_t mp_obj_new_frame(const mp_code_state_t *code_state);
 
+#if MICROPY_PY_SYS_GETFRAME
+// Get (creating on demand) the identity-stable frame object of a code state.
+mp_obj_frame_t *mp_prof_frame_for(mp_code_state_t *code_state);
+
+// This is the implementation for sys._getframe.
+mp_obj_t mp_prof_sys_getframe(mp_int_t depth);
+#endif
+
 // This is the implementation for the sys.settrace
 mp_obj_t mp_prof_settrace(mp_obj_t callback);
 

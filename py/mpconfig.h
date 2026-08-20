@@ -1824,6 +1824,15 @@ typedef time_t mp_timestamp_t;
 #define MICROPY_PY_SYS_SETTRACE (0)
 #endif
 
+// Whether to provide the "sys._getframe" function.  Frame objects are built
+// on demand from the code-state chain that MICROPY_PY_SYS_SETTRACE already
+// maintains unconditionally (so this requires MICROPY_PY_SYS_SETTRACE); no
+// trace function needs to be installed.  It also makes frame creation lazy:
+// per-call frame allocation only happens while a trace function is set.
+#ifndef MICROPY_PY_SYS_GETFRAME
+#define MICROPY_PY_SYS_GETFRAME (MICROPY_PY_SYS_SETTRACE)
+#endif
+
 // Whether to provide "sys.getsizeof" function
 #ifndef MICROPY_PY_SYS_GETSIZEOF
 #define MICROPY_PY_SYS_GETSIZEOF (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EVERYTHING)
