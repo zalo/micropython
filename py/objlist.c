@@ -277,6 +277,82 @@ static mp_obj_t list_pop(size_t n_args, const mp_obj_t *args) {
     return ret;
 }
 
+#if MICROPY_PY_BUILTINS_SORT_STABLE
+
+// Stable bottom-up merge sort, matching CPython's observable semantics:
+// equal elements keep their original order (also under reverse=True), and
+// the key function is called exactly once per element.  Costs 2n temporary
+// object pointers (n computed keys + n merge scratch; n scratch when there
+// is no key function), all GC-allocated and freed before returning.
+static void mp_stable_sort(mp_obj_t *items, size_t len, mp_obj_t key_fn, bool reverse) {
+    mp_obj_t *keys = items;
+    mp_obj_t *tmp_items = NULL;
+    if (key_fn != MP_OBJ_NULL) {
+        keys = m_new(mp_obj_t, len);
+        for (size_t i = 0; i < len; i++) {
+            keys[i] = mp_call_function_1(key_fn, items[i]);
+        }
+        tmp_items = m_new(mp_obj_t, len);
+    }
+    mp_obj_t *tmp_keys = m_new(mp_obj_t, len);
+    for (size_t width = 1; width < len; width *= 2) {
+        for (size_t start = 0; start + width < len; start += 2 * width) {
+            size_t mid = start + width;
+            size_t end = start + 2 * width;
+            if (end > len) {
+                end = len;
+            }
+            size_t i = start, j = mid, k = start;
+            while (i < mid && j < end) {
+                // Take from the right run only when its key strictly
+                // precedes the left run's key; ties take the left element,
+                // which is what makes the merge stable (including under
+                // reverse=True, where CPython also keeps the original
+                // order of equal elements).
+                mp_obj_t lhs = reverse ? keys[i] : keys[j];
+                mp_obj_t rhs = reverse ? keys[j] : keys[i];
+                if (mp_obj_is_true(mp_binary_op(MP_BINARY_OP_LESS, lhs, rhs))) {
+                    tmp_keys[k] = keys[j];
+                    if (tmp_items != NULL) {
+                        tmp_items[k] = items[j];
+                    }
+                    j++;
+                } else {
+                    tmp_keys[k] = keys[i];
+                    if (tmp_items != NULL) {
+                        tmp_items[k] = items[i];
+                    }
+                    i++;
+                }
+                k++;
+            }
+            for (; i < mid; i++, k++) {
+                tmp_keys[k] = keys[i];
+                if (tmp_items != NULL) {
+                    tmp_items[k] = items[i];
+                }
+            }
+            for (; j < end; j++, k++) {
+                tmp_keys[k] = keys[j];
+                if (tmp_items != NULL) {
+                    tmp_items[k] = items[j];
+                }
+            }
+            memcpy(keys + start, tmp_keys + start, (end - start) * sizeof(mp_obj_t));
+            if (tmp_items != NULL) {
+                memcpy(items + start, tmp_items + start, (end - start) * sizeof(mp_obj_t));
+            }
+        }
+    }
+    m_del(mp_obj_t, tmp_keys, len);
+    if (key_fn != MP_OBJ_NULL) {
+        m_del(mp_obj_t, tmp_items, len);
+        m_del(mp_obj_t, keys, len);
+    }
+}
+
+#else // MICROPY_PY_BUILTINS_SORT_STABLE
+
 // "head" is actually the *exclusive lower bound* of the range to sort. That is,
 // the first element to be sorted is `head[1]`, not `head[0]`. Similarly `tail`
 // is an *inclusive upper bound* of the range to sort. That is, the final
@@ -321,7 +397,8 @@ static void mp_quicksort(mp_obj_t *head, mp_obj_t *tail, mp_obj_t key_fn, mp_obj
     }
 }
 
-// TODO Python defines sort to be stable but ours is not
+#endif // MICROPY_PY_BUILTINS_SORT_STABLE
+
 mp_obj_t mp_obj_list_sort(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_key, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
@@ -339,9 +416,15 @@ mp_obj_t mp_obj_list_sort(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_
     mp_obj_list_t *self = MP_OBJ_TO_PTR(pos_args[0]);
 
     if (self->len > 1) {
+        #if MICROPY_PY_BUILTINS_SORT_STABLE
+        mp_stable_sort(self->items, self->len,
+            args.key.u_obj == mp_const_none ? MP_OBJ_NULL : args.key.u_obj,
+            args.reverse.u_bool);
+        #else
         mp_quicksort(self->items - 1, self->items + self->len - 1,
             args.key.u_obj == mp_const_none ? MP_OBJ_NULL : args.key.u_obj,
             args.reverse.u_bool ? mp_const_false : mp_const_true);
+        #endif
     }
 
     return mp_const_none;

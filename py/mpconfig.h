@@ -1005,6 +1005,14 @@ typedef double mp_float_t;
 #endif
 #endif
 
+// Whether list.sort()/sorted() are stable, as Python specifies (equal
+// elements keep their original order, and the key function is called once
+// per element).  Uses a merge sort with 2n temporary object pointers;
+// otherwise an in-place unstable quicksort is used.
+#ifndef MICROPY_PY_BUILTINS_SORT_STABLE
+#define MICROPY_PY_BUILTINS_SORT_STABLE (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
+#endif
+
 // Whether to provide a high-quality hash for float and complex numbers.
 // Otherwise the default is a very simple but correct hashing function:
 // truncation to int, under which every float sharing an integer part (in
