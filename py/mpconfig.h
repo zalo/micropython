@@ -1006,9 +1006,12 @@ typedef double mp_float_t;
 #endif
 
 // Whether to provide a high-quality hash for float and complex numbers.
-// Otherwise the default is a very simple but correct hashing function.
+// Otherwise the default is a very simple but correct hashing function:
+// truncation to int, under which every float sharing an integer part (in
+// particular every value in (-1, 1)) collides, degrading dicts/sets keyed
+// by non-integral floats to linear probing.
 #ifndef MICROPY_FLOAT_HIGH_QUALITY_HASH
-#define MICROPY_FLOAT_HIGH_QUALITY_HASH (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EVERYTHING)
+#define MICROPY_FLOAT_HIGH_QUALITY_HASH (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_FULL_FEATURES)
 #endif
 
 // Enable features which improve CPython compatibility
