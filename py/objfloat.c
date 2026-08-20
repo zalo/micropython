@@ -79,8 +79,18 @@ mp_int_t mp_float_hash(mp_float_t src) {
     mp_int_t val;
     const int adj_exp = (int)u.p.exp - MP_FLOAT_EXP_BIAS;
     if (adj_exp < 0) {
-        // value < 1; must be sure to handle 0.0 correctly (ie return 0)
-        val = u.i;
+        // value < 1; must be sure to handle 0.0 correctly (ie return 0).
+        // The exponent and high mantissa bits distinguish these values, so
+        // when mp_int_t is narrower than the representation (eg double
+        // floats with 32-bit mp_int_t) fold the high bits in - otherwise
+        // dyadic fractions (0.5, 0.25, 0.75, ...) all truncate to hash 0.
+        // The sign bit is shifted out first (the sign is applied at the
+        // end, and -0.0 must keep hashing like 0.0).
+        mp_float_uint_t bits = u.i << 1;
+        if (sizeof(mp_float_uint_t) > sizeof(mp_int_t)) {
+            bits ^= bits >> (MP_BITS_PER_BYTE * sizeof(mp_float_uint_t) / 2);
+        }
+        val = (mp_int_t)bits;
     } else {
         // if adj_exp is max then: u.p.frc==0 indicates inf, else NaN
         // else: 1 <= value
@@ -88,8 +98,17 @@ mp_int_t mp_float_hash(mp_float_t src) {
 
         if (adj_exp <= MP_FLOAT_FRAC_BITS) {
             // number may have a fraction; xor the integer part with the fractional part
-            val = (frc >> (MP_FLOAT_FRAC_BITS - adj_exp))
-                ^ (frc & (((mp_float_uint_t)1 << (MP_FLOAT_FRAC_BITS - adj_exp)) - 1));
+            mp_float_uint_t frac_part = frc & (((mp_float_uint_t)1 << (MP_FLOAT_FRAC_BITS - adj_exp)) - 1);
+            mp_float_uint_t bits = (frc >> (MP_FLOAT_FRAC_BITS - adj_exp)) ^ frac_part;
+            // When mp_int_t is narrower than the representation the cast
+            // below would keep only the low fraction bits; fold the high
+            // bits in so different fractions stay distinct.  Integral
+            // values (no fraction bits) are left exact: hash(x) must equal
+            // hash(int(x)).
+            if (frac_part != 0 && sizeof(mp_float_uint_t) > sizeof(mp_int_t)) {
+                bits ^= bits >> (MP_BITS_PER_BYTE * sizeof(mp_float_uint_t) / 2);
+            }
+            val = (mp_int_t)bits;
         } else if ((unsigned int)adj_exp < MP_BITS_PER_BYTE * sizeof(mp_int_t) - 1) {
             // the number is a (big) whole integer and will fit in val's signed-width
             val = (mp_int_t)frc << (adj_exp - MP_FLOAT_FRAC_BITS);

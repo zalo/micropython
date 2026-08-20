@@ -20,5 +20,15 @@ print(hash(0.5) == hash(2.0 / 4.0))
 frac = {hash(i / 1000.0) for i in range(512)}
 print(len(frac) > 384)
 
+# dyadic fractions have all-zero low mantissa bits: they must still hash
+# distinctly on builds where mp_int_t is narrower than the float
+dyadic = {hash(i / 64.0) for i in range(1, 64)}
+print(len(dyadic) > 48)
+
+# one-decimal values (repeating binary fractions over many integer parts)
+# exercise the narrow-mp_int_t fold of the integer-plus-fraction branch
+tenths = {hash(i / 10.0) for i in range(520)}
+print(len(tenths) > 500)
+
 coords = {hash((i / 10.0, (i * 13 % 511) / 10.0, (i * 7 % 511) / 10.0)) for i in range(512)}
 print(len(coords) > 384)
