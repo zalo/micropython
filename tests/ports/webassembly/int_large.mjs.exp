@@ -1,0 +1,11 @@
+int 42
+int -7
+int -2147483648
+int 2147483647
+float True
+float True
+float True
+float True
+float True
+1000000000000000.0
+1e+100

@@ -181,10 +181,17 @@ function proxy_convert_js_to_mp_obj_jsside_helper(js_obj, out, allow_pyproxy) {
         kind = PROXY_KIND_JS_BOOLEAN;
         Module.setValue(out + 4, js_obj, "i32");
     } else if (typeof js_obj === "number") {
-        if (Number.isInteger(js_obj)) {
+        if (
+            Number.isInteger(js_obj) &&
+            js_obj >= -2147483648 &&
+            js_obj <= 2147483647
+        ) {
             kind = PROXY_KIND_JS_INTEGER;
             Module.setValue(out + 4, js_obj, "i32");
         } else {
+            // Out-of-int32 integral numbers must take the double path:
+            // the C side reads PROXY_KIND_JS_INTEGER as an i32, so values
+            // like 1e15 would otherwise arrive silently wrapped.
             kind = PROXY_KIND_JS_DOUBLE;
             // double must be stored to an address that's a multiple of 8
             const temp = (out + 4) & ~7;
