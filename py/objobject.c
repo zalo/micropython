@@ -48,7 +48,7 @@ static mp_obj_t object___init__(mp_obj_t self) {
 static MP_DEFINE_CONST_FUN_OBJ_1(object___init___obj, object___init__);
 
 static mp_obj_t object___new__(mp_obj_t cls) {
-    if (!mp_obj_is_type(cls, &mp_type_type) || !mp_obj_is_instance_type((mp_obj_type_t *)MP_OBJ_TO_PTR(cls))) {
+    if (!mp_obj_is_class(cls) || !mp_obj_is_instance_type((mp_obj_type_t *)MP_OBJ_TO_PTR(cls))) {
         mp_raise_TypeError(MP_ERROR_TEXT("arg must be user-type"));
     }
     // This executes only "__new__" part of instance creation.

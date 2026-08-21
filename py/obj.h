@@ -576,6 +576,10 @@ typedef mp_obj_t (*mp_fun_kw_t)(size_t n, const mp_obj_t *, mp_map_t *);
 #define MP_TYPE_FLAG_ITER_IS_STREAM (MP_TYPE_FLAG_ITER_IS_ITERNEXT | MP_TYPE_FLAG_ITER_IS_CUSTOM)
 #define MP_TYPE_FLAG_INSTANCE_TYPE (0x0200)
 #define MP_TYPE_FLAG_SUBSCR_ALLOWS_STACK_SLICE (0x0400)
+// If MP_TYPE_FLAG_METACLASS is set then this type is a subclass of `type` (a
+// custom metaclass): its instances are themselves type objects.  Only used
+// when MICROPY_PY_METACLASSES is enabled.
+#define MP_TYPE_FLAG_METACLASS (0x0800)
 
 typedef enum {
     PRINT_STR = 0,
@@ -979,6 +983,14 @@ void *mp_obj_malloc_with_finaliser_helper(size_t num_bytes, const mp_obj_type_t 
     1)
 
 #define mp_obj_is_type(o, t) (mp_type_assert_not_bool_int_str_nonetype(t) && mp_obj_is_exact_type(o, t))
+
+// True if o is a class object: an instance of `type` itself or (with
+// MICROPY_PY_METACLASSES) an instance of a custom metaclass.
+#if MICROPY_PY_METACLASSES
+#define mp_obj_is_class(o) (mp_obj_is_obj(o) && (((mp_obj_base_t *)MP_OBJ_TO_PTR(o))->type == &mp_type_type || (((mp_obj_base_t *)MP_OBJ_TO_PTR(o))->type->flags & MP_TYPE_FLAG_METACLASS)))
+#else
+#define mp_obj_is_class(o) mp_obj_is_type(o, &mp_type_type)
+#endif
 #if MICROPY_OBJ_IMMEDIATE_OBJS
 // bool's are immediates, not real objects, so test for the 2 possible values.
 #define mp_obj_is_bool(o) ((o) == mp_const_false || (o) == mp_const_true)

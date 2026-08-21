@@ -1316,6 +1316,16 @@ typedef time_t mp_timestamp_t;
 #define MICROPY_PY_DESCRIPTORS (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
 #endif
 
+// Whether to support custom metaclasses: subclassing `type` creates a real
+// metatype whose instances are themselves types, the class statement accepts
+// a `metaclass=` keyword (and inherits the metaclass from its bases), class
+// creation is routed through the metaclass's __call__/__new__/__init__, and
+// attribute/call/subscript/iteration on a class falls back to its metaclass.
+// Normal (non-metaclass) class creation and attribute lookup are unaffected.
+#ifndef MICROPY_PY_METACLASSES
+#define MICROPY_PY_METACLASSES (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
+#endif
+
 // Whether to support class __delattr__ and __setattr__ methods
 // This costs some code size and makes store/delete of instance
 // attributes slower for the classes that use this feature
