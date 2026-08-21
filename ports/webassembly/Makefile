@@ -95,6 +95,7 @@ JSFLAGS += -s EXPORTED_RUNTIME_METHODS="\
 JSFLAGS += --js-library library.js
 JSFLAGS += -s SUPPORT_LONGJMP=emscripten
 JSFLAGS += -s MODULARIZE -s EXPORT_NAME=_createMicroPythonModule
+JSFLAGS += $(JSFLAGS_EXTRA)
 
 ################################################################################
 # Source files and libraries.
