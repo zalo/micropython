@@ -44,6 +44,17 @@
 #define MICROPY_READER_VFS          (MICROPY_VFS)
 #define MICROPY_ENABLE_GC           (1)
 #define MICROPY_ENABLE_PYSTACK      (1)
+
+// Collect garbage at any depth by conservatively scanning the C (shadow)
+// stack only.  This is sound only when the wasm binary was post-processed with
+// Binaryen's --flatten,--spill-pointers passes (pointer locals live across a
+// call are spilled to the C stack), which the build enables with
+// GC_SPILL_POINTERS=1.  Without it, a SPLIT_HEAP_AUTO build defers every
+// collection to the top level (when control returns to JavaScript), so the
+// heap grows with everything allocated during one top-level call.
+#ifndef MICROPY_GC_SCAN_SPILLED_STACK
+#define MICROPY_GC_SCAN_SPILLED_STACK (0)
+#endif
 #define MICROPY_KBD_EXCEPTION       (1)
 #define MICROPY_REPL_EVENT_DRIVEN   (1)
 #define MICROPY_LONGINT_IMPL        (MICROPY_LONGINT_IMPL_MPZ)

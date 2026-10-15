@@ -49,10 +49,16 @@
 // the top-level call into C.
 static size_t external_call_depth = 0;
 
+#if MICROPY_GC_SCAN_SPILLED_STACK
+// Spilling pointer locals makes C frames larger, so the variant's Makefile
+// links with -sSTACK_SIZE=128KB and the limit here keeps the same 50% margin.
+#define CSTACK_SIZE (64 * 1024)
+#else
 // Emscripten defaults to a 64k C-stack, so our limit should be less than that.
 #define CSTACK_SIZE (32 * 1024)
+#endif
 
-#if MICROPY_GC_SPLIT_HEAP_AUTO
+#if MICROPY_GC_SPLIT_HEAP_AUTO && !MICROPY_GC_SCAN_SPILLED_STACK
 static void gc_collect_top_level(void);
 #endif
 
@@ -62,7 +68,7 @@ void external_call_depth_inc(void) {
 
 void external_call_depth_dec(void) {
     --external_call_depth;
-    #if MICROPY_GC_SPLIT_HEAP_AUTO
+    #if MICROPY_GC_SPLIT_HEAP_AUTO && !MICROPY_GC_SCAN_SPILLED_STACK
     if (external_call_depth == 0) {
         gc_collect_top_level();
     }
@@ -82,7 +88,7 @@ void mp_js_init(int pystack_size, int heap_size) {
     gc_init(heap, heap + heap_size);
     #endif
 
-    #if MICROPY_GC_SPLIT_HEAP_AUTO
+    #if MICROPY_GC_SPLIT_HEAP_AUTO && !MICROPY_GC_SCAN_SPILLED_STACK
     // When MICROPY_GC_SPLIT_HEAP_AUTO is enabled, set the GC threshold to a low
     // value so that a collection is triggered before the heap fills up.  The actual
     // garbage collection will happen later when control returns to the top-level,
@@ -179,12 +185,16 @@ int mp_js_repl_process_char(int c) {
 
 #if MICROPY_GC_SPLIT_HEAP_AUTO
 
-static bool gc_collect_pending = false;
-
 // The largest new region that is available to become Python heap.
 size_t gc_get_max_new_split(void) {
     return 128 * 1024 * 1024;
 }
+
+#endif
+
+#if MICROPY_GC_SPLIT_HEAP_AUTO && !MICROPY_GC_SCAN_SPILLED_STACK
+
+static bool gc_collect_pending = false;
 
 // Don't collect anything.  Instead require the heap to grow.
 void gc_collect(void) {
@@ -209,7 +219,16 @@ static void gc_scan_func(void *begin, void *end) {
 void gc_collect(void) {
     gc_collect_start();
     emscripten_scan_stack(gc_scan_func);
+    #if MICROPY_GC_SCAN_SPILLED_STACK
+    // Built with Binaryen's --flatten,--spill-pointers passes: every
+    // pointer-sized wasm local that is live across a call is stored to the
+    // C (shadow) stack before that call, so the scan above already sees every
+    // root held by a suspended caller.  No Asyncify unwind is needed, and the
+    // collection is safe at any depth -- including in the middle of a
+    // top-level exec, which is what keeps the heap bounded by live data.
+    #else
     emscripten_scan_registers(gc_scan_func);
+    #endif
     gc_collect_end();
 }
 
