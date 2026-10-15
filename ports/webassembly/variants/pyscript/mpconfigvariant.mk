@@ -1,5 +1,13 @@
 JSFLAGS += -s ALLOW_MEMORY_GROWTH
 
+# Start small and grow: emscripten's default INITIAL_MEMORY is 16 MiB, but a
+# typical heap (the JS side passes `heapsize`, 1 MiB by default) plus static
+# data, pystack and the C stack fit in a fraction of that, and every MiB of
+# committed linear memory counts against a memory-budgeted host (128 MB per
+# Cloudflare Workers isolate). ALLOW_MEMORY_GROWTH covers larger heaps.
+INITIAL_MEMORY ?= 6MB
+JSFLAGS += -s INITIAL_MEMORY=$(INITIAL_MEMORY)
+
 FROZEN_MANIFEST ?= variants/pyscript/manifest.py
 
 # Collect garbage during execution, not only when control returns to
